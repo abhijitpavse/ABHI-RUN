@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Chrome Dino Game Clone</title>
+  <style>
+    body {
+      background: #f7f7f7;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+    canvas {
+      background: #f7f7f7;
+      border: 3px solid #666;
+      box-shadow: 0 3px 10px #bbb;
+    }
+  </style>
+</head>
+<body>
+
+<canvas id="game" width="750" height="220"></canvas>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+const gravity = 0.9;
+const jumpPower = -13;
+let gameSpeed = 7;
+let score = 0;
+let highScore = 0;
+let frame = 0;
+let gameOver = false;
+const groundY = 200;
+
+// Day–Night
+let dayTimer = 0;
+const dayLength = 2000;
+
+// Dino
+const dino = {
+  x: 60,
+  y: groundY - 40,
+  width: 44,
+  height: 40,
+  velocityY: 0,
+  jumping: false
+};
+
+// Objects
+let obstacles = [];
+let clouds = [];
+let stars = [];
+
+// Reset
+function resetGame() {
+  dino.y = groundY - dino.height;
+  dino.velocityY = 0;
+  dino.jumping = false;
+  obstacles = [];
+  clouds = [];
+  stars = [];
+  score = 0;
+  gameSpeed = 7;
+  frame = 0;
+  gameOver = false;
+}
+
+// Background
+function drawBackground() {
+  dayTimer++;
+  const cycle = (dayTimer % dayLength) / dayLength;
+
+  let sky;
+  if (cycle < 0.5) {
+    sky = `rgb(${200 - cycle*120}, ${230 - cycle*80}, 255)`;
+  } else {
+    sky = `rgb(${30 + (cycle-0.5)*60}, ${30 + (cycle-0.5)*60}, 70)`;
+  }
+
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  if (cycle < 0.45) drawSun(80, 60);
+  if (cycle > 0.55) drawStars();
+}
+
+// Sun
+function drawSun(x, y) {
+  const g = ctx.createRadialGradient(x, y, 5, x, y, 30);
+  g.addColorStop(0, "rgba(255,255,200,1)");
+  g.addColorStop(1, "rgba(255,255,200,0)");
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(x, y, 30, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+// Stars
+function drawStars() {
+  if (stars.length < 40) {
+    stars.push({
+      x: Math.random() * canvas.width,
+      y: Math.random() * 120,
+      r: Math.random() * 2
+    });
+  }
+  ctx.fillStyle = "#fff";
+  stars.forEach(s => {
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+    ctx.fill();
+  });
+}
+
+// Dino (with visible legs)
+function drawDino(ctx, x, y, frame) {
+  ctx.save();
+  ctx.translate(x, y);
+
+  ctx.fillStyle = "#535353";
+  ctx.fillRect(6, 6, 28, 18); // body
+  ctx.fillRect(25, -2, 16, 16); // head
+  ctx.fillRect(0, 16, 8, 6); // tail
+
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(38, 2, 3, 3);
+  ctx.fillStyle = "#333";
+  ctx.fillRect(39, 3, 1, 1);
+
+  ctx.fillStyle = "#444";
+  ctx.fillRect(14, 18, 8, 3);
+
+  ctx.fillStyle = "#535353";
+  if (frame % 2 === 0) {
+    ctx.fillRect(12, 26, 6, 14);
+    ctx.fillRect(24, 28, 6, 12);
+  } else {
+    ctx.fillRect(12, 28, 6, 12);
+    ctx.fillRect(24, 26, 6, 14);
+  }
+
+  ctx.restore();
+}
+
+// Cactus
+function drawCactus(ctx, x, y, h) {
+  ctx.fillStyle = "#397d02";
+  ctx.fillRect(x, y - h, 12, h);
+  ctx.fillRect(x - 5, y - h + 10, 5, 20);
+  ctx.fillRect(x + 12, y - h + 15, 4, 20);
+}
+
+// Tree
+function drawTree(ctx, x, y, h) {
+  ctx.fillStyle = "#8b5a2b";
+  ctx.fillRect(x + 6, y - h, 10, h);
+
+  ctx.fillStyle = "#2d6a4f";
+  ctx.beginPath();
+  ctx.arc(x + 11, y - h, 20, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+// Cloud
+function drawCloud(ctx, x, y) {
+  ctx.fillStyle = "#bbb";
+  ctx.beginPath();
+  ctx.arc(x, y, 16, 0, Math.PI * 2);
+  ctx.arc(x + 20, y - 10, 20, 0, Math.PI * 2);
+  ctx.arc(x + 40, y, 16, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+// Draw
+function draw() {
+  drawBackground();
+
+  ctx.strokeStyle = "#555";
+  ctx.beginPath();
+  ctx.moveTo(0, groundY);
+  ctx.lineTo(canvas.width, groundY);
+  ctx.stroke();
+
+  clouds.forEach(c => drawCloud(ctx, c.x, c.y));
+
+  obstacles.forEach(o => {
+    if (o.type === "tree") drawTree(ctx, o.x, groundY, o.h);
+    else drawCactus(ctx, o.x, groundY, o.h);
+  });
+
+  drawDino(ctx, dino.x, dino.y, Math.floor(frame / 6));
+
+  ctx.font = "20px monospace";
+  ctx.fillStyle = "#444";
+  ctx.fillText(
+    `HI ${String(highScore).padStart(5,"0")}   ${String(score).padStart(5,"0")}`,
+    canvas.width - 260, 40
+  );
+
+  if (gameOver) {
+    ctx.font = "36px monospace";
+    ctx.fillStyle = "#d90429";
+    ctx.fillText("GAME OVER", canvas.width/2 - 120, 110);
+    ctx.font = "22px monospace";
+    ctx.fillStyle = "#333";
+    ctx.fillText("Press SPACE to restart", canvas.width/2 - 135, 145);
+  }
+}
+
+// Update
+function update() {
+  if (gameOver) return draw();
+
+  frame++;
+  if (frame % 120 === 0) gameSpeed += 0.25;
+
+  dino.y += dino.velocityY;
+  dino.velocityY += gravity;
+  if (dino.y > groundY - dino.height) {
+    dino.y = groundY - dino.height;
+    dino.velocityY = 0;
+    dino.jumping = false;
+  }
+
+  if (frame % 90 === 0) {
+    const isTree = Math.random() < 0.4;
+    obstacles.push({
+      x: canvas.width + 20,
+      h: isTree ? 50 : 35 + Math.random() * 25,
+      w: isTree ? 24 : 12,
+      type: isTree ? "tree" : "cactus"
+    });
+  }
+
+  obstacles.forEach(o => {
+    o.x -= gameSpeed;
+    if (
+      o.x < dino.x + dino.width &&
+      o.x + o.w > dino.x &&
+      groundY - o.h < dino.y + dino.height
+    ) {
+      gameOver = true;
+      highScore = Math.max(score, highScore);
+    }
+  });
+
+  obstacles = obstacles.filter(o => o.x + o.w > 0);
+
+  if (Math.random() < 0.01) {
+    clouds.push({ x: canvas.width, y: 50 + Math.random() * 40, speed: 1 + Math.random() * 2 });
+  }
+  clouds.forEach(c => c.x -= c.speed);
+  clouds = clouds.filter(c => c.x > -80);
+
+  if (frame % 2 === 0) score++;
+
+  draw();
+  requestAnimationFrame(update);
+}
+
+// Controls
+document.addEventListener("keydown", e => {
+  if (e.code === "Space" || e.code === "ArrowUp") {
+    if (!gameOver && !dino.jumping) {
+      dino.velocityY = jumpPower;
+      dino.jumping = true;
+    }
+    if (gameOver) {
+      resetGame();
+      requestAnimationFrame(update);
+    }
+  }
+});
+
+resetGame();
+requestAnimationFrame(update);
+</script>
+
+</body>
+</html>
