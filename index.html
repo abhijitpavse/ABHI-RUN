@@ -16,6 +16,7 @@
       background: #f7f7f7;
       border: 3px solid #666;
       box-shadow: 0 3px 10px #bbb;
+      touch-action: manipulation; /* ✅ IMPORTANT for mobile */
     }
   </style>
 </head>
@@ -69,6 +70,18 @@ function resetGame() {
   gameOver = false;
 }
 
+// ✅ UNIFIED JUMP HANDLER (Keyboard + Touch)
+function handleJump() {
+  if (!gameOver && !dino.jumping) {
+    dino.velocityY = jumpPower;
+    dino.jumping = true;
+  }
+  if (gameOver) {
+    resetGame();
+    requestAnimationFrame(update);
+  }
+}
+
 // Background
 function drawBackground() {
   dayTimer++;
@@ -116,15 +129,15 @@ function drawStars() {
   });
 }
 
-// Dino (with visible legs)
+// Dino
 function drawDino(ctx, x, y, frame) {
   ctx.save();
   ctx.translate(x, y);
 
   ctx.fillStyle = "#535353";
-  ctx.fillRect(6, 6, 28, 18); // body
-  ctx.fillRect(25, -2, 16, 16); // head
-  ctx.fillRect(0, 16, 8, 6); // tail
+  ctx.fillRect(6, 6, 28, 18);
+  ctx.fillRect(25, -2, 16, 16);
+  ctx.fillRect(0, 16, 8, 6);
 
   ctx.fillStyle = "#fff";
   ctx.fillRect(38, 2, 3, 3);
@@ -204,10 +217,10 @@ function draw() {
   if (gameOver) {
     ctx.font = "36px monospace";
     ctx.fillStyle = "#d90429";
-    ctx.fillText("GAME OVER", canvas.width/2 - 120, 110);
+    ctx.fillText("GAME OVER", canvas.width / 2 - 120, 110);
     ctx.font = "22px monospace";
     ctx.fillStyle = "#333";
-    ctx.fillText("Press SPACE to restart", canvas.width/2 - 135, 145);
+    ctx.fillText("Tap / Space to Restart", canvas.width / 2 - 135, 145);
   }
 }
 
@@ -262,18 +275,20 @@ function update() {
   requestAnimationFrame(update);
 }
 
-// Controls
+// ✅ CONTROLS
 document.addEventListener("keydown", e => {
   if (e.code === "Space" || e.code === "ArrowUp") {
-    if (!gameOver && !dino.jumping) {
-      dino.velocityY = jumpPower;
-      dino.jumping = true;
-    }
-    if (gameOver) {
-      resetGame();
-      requestAnimationFrame(update);
-    }
+    handleJump();
   }
+});
+
+canvas.addEventListener("touchstart", e => {
+  e.preventDefault();
+  handleJump();
+}, { passive: false });
+
+canvas.addEventListener("click", () => {
+  handleJump();
 });
 
 resetGame();
