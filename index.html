@@ -159,16 +159,16 @@ function drawAbhi(ctx, x, y, frame) {
   ctx.restore();
 }
 
-// Cactus
-function drawCactus(ctx, x, y, h) {
+// bug
+function drawbug(ctx, x, y, h) {
   ctx.fillStyle = "#397d02";
   ctx.fillRect(x, y - h, 12, h);
   ctx.fillRect(x - 5, y - h + 10, 5, 20);
   ctx.fillRect(x + 12, y - h + 15, 4, 20);
 }
 
-// Tree
-function drawTree(ctx, x, y, h) {
+// deadline
+function drawdeadline(ctx, x, y, h) {
   ctx.fillStyle = "#8b5a2b";
   ctx.fillRect(x + 6, y - h, 10, h);
 
@@ -190,7 +190,16 @@ function drawCloud(ctx, x, y) {
 
 // Draw
 function draw() {
-  ctx.font = "18px monospace"; ctx.fillStyle = "#444"; ctx.fillText("🏃 ABHI RUN - Escape the Deadlines!",20,25);
+
+  drawBackground();
+
+ctx.font="20px monospace";
+ctx.fillStyle="#222";
+ctx.fillText("🏃 ABHI RUN",20,24);
+
+ctx.font="13px monospace";
+ctx.fillStyle="#666";
+ctx.fillText("Escape Bugs • Deadlines • Reality",20,42);
 
   ctx.strokeStyle = "#555";
   ctx.beginPath();
@@ -201,8 +210,8 @@ function draw() {
   clouds.forEach(c => drawCloud(ctx, c.x, c.y));
 
   obstacles.forEach(o => {
-    if (o.type === "tree") drawTree(ctx, o.x, groundY, o.h);
-    else drawCactus(ctx, o.x, groundY, o.h);
+    if(o.type=="deadline") drawdeadline(ctx, o.x, groundY, o.h);
+    else drawbug(ctx, o.x, groundY, o.h);
   });
 
   drawAbhi(ctx, abhi.x, abhi.y, Math.floor(frame / 6));
@@ -241,12 +250,12 @@ function update() {
   }
 
   if (frame % 90 === 0) {
-    const isTree = Math.random() < 0.4;
+    const isdeadline = Math.random() < 0.4;
     obstacles.push({
       x: canvas.width + 20,
-      h: isTree ? 50 : 35 + Math.random() * 25,
-      w: isTree ? 24 : 12,
-      type: isTree ? "tree" : "cactus"
+      h: isdeadline ? 50 : 35 + Math.random() * 25,
+      w: isdeadline ? 24 : 12,
+      type: isdeadline ? "deadline" : "bug"
     });
   }
 
