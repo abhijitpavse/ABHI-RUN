@@ -142,6 +142,6 @@ LinkedIn: https://linkedin.com/in/abhijitpavse
 
 <p align="center">
 
-If you're reading this... Abhi survived another deadline. 😎 Made with 🧠.
+If you're reading this... Abhi survived another deadline. 😎 Created using skills & 🧠.
 
 </p>
