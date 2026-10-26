@@ -2,307 +2,528 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>ABHI Run</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ABHI RUN</title>
   <style>
+    html, body { height: 100%; }
     body {
-      background: #f7f7f7;
+      margin: 0;
       display: flex;
+      flex-direction: column;
       justify-content: center;
       align-items: center;
-      height: 100vh;
-      margin: 0;
+      background: #f2f4f7;
+      font-family: monospace;
     }
     canvas {
-      background: #f7f7f7;
+      display: block;
+      width: min(750px, 96vw);
+      height: auto;
       border: 3px solid #666;
-      box-shadow: 0 3px 10px #bbb;
-      touch-action: manipulation; /* ✅ IMPORTANT for mobile */
+      border-radius: 8px;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, .25);
+      touch-action: manipulation; /* important for mobile */
+    }
+    .hint {
+      margin-top: 12px;
+      font-size: 13px;
+      color: #555;
+      text-align: center;
+      padding: 0 10px;
+    }
+    .hint button {
+      font-family: inherit;
+      font-size: 12px;
+      padding: 4px 10px;
+      margin-left: 6px;
+      border: 1px solid #888;
+      border-radius: 14px;
+      background: transparent;
+      color: inherit;
+      cursor: pointer;
     }
   </style>
 </head>
 <body>
 
 <canvas id="game" width="750" height="220"></canvas>
+<div class="hint" id="hint">
+  Space / ↑ / Tap = Jump &nbsp;•&nbsp; T = toggle sky
+  <button id="skyBtn" type="button">🕒 Sky: Game cycle</button>
+</div>
 
 <script>
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
+const W = canvas.width, H = canvas.height;
 
-const gravity = 0.9;
-const jumpPower = -13;
-let gameSpeed = 7;
-let score = 0;
+// ---------- Constants ----------
+const GROUND  = 200;
+const GRAVITY = 0.9;
+const JUMP    = -13;
+const STEP    = 1000 / 60;   // fixed 60 updates/sec on every screen
+const DAY_LEN = 3600;        // ticks per full day (~60 sec)
+const TAU     = Math.PI * 2;
+
+// ---------- Colour helpers ----------
+const mix  = (a, b, t) => a.map((v, i) => Math.round(v + (b[i] - v) * t));
+const rgb  = c => `rgb(${c[0]},${c[1]},${c[2]})`;
+const pal  = (d, n, t) => rgb(mix(d, n, t));
+const smooth = t => t * t * (3 - 2 * t);
+const pad  = v => String(v).padStart(5, "0");
+
+// Palettes: [day], [night]
+const SKY_TOP_D = [150, 205, 255], SKY_TOP_N = [8, 12, 34];
+const SKY_BOT_D = [232, 246, 255], SKY_BOT_N = [30, 44, 88];
+const HILL_FAR_D = [190, 220, 205], HILL_FAR_N = [26, 38, 74];
+const HILL_NEAR_D = [160, 204, 172], HILL_NEAR_N = [18, 30, 58];
+const GROUND_D = [226, 214, 190], GROUND_N = [34, 44, 74];
+const LINE_D = [90, 90, 90], LINE_N = [160, 182, 225];
+const PEBBLE_D = [160, 148, 125], PEBBLE_N = [84, 100, 145];
+const CLOUD_D = [255, 255, 255], CLOUD_N = [78, 94, 142];
+// Obstacles (brighter at night so they stay clearly visible)
+const CAC_D = [46, 125, 50],  CAC_N = [120, 255, 165];
+const CACL_D = [18, 70, 25],  CACL_N = [215, 255, 230];
+const TRK_D = [120, 80, 40],  TRK_N = [215, 165, 110];
+const LEAF_D = [45, 106, 79], LEAF_N = [100, 225, 155];
+const LEAFH_D = [66, 150, 110], LEAFH_N = [170, 255, 205];
+const TREEL_D = [22, 68, 48], TREEL_N = [220, 255, 232];
+
+// ---------- State ----------
+let gameSpeed, score, frame, gameOver, nextSpawn;
+let overAt = 0, worldX = 0;
 let highScore = 0;
-let frame = 0;
-let gameOver = false;
-const groundY = 200;
+try { highScore = parseInt(localStorage.getItem("abhirun_best")) || 0; } catch (e) {}
 
-// Day–Night
-let dayTimer = 0;
-const dayLength = 2000;
+let dayTimer = 300;       // start in the morning
+let realSky = false;      // false = game cycle, true = follow real clock
 
-// abhi
-const abhi = {
-  x: 60,
-  y: groundY - 40,
-  width: 44,
-  height: 40,
-  velocityY: 0,
-  jumping: false
-};
+const abhi = { x: 60, y: GROUND - 46, width: 28, height: 46, vy: 0, jumping: false };
 
-// Objects
-let obstacles = [];
-let clouds = [];
-let stars = [];
+let obstacles = [], clouds = [], pebbles = [];
+const stars = Array.from({ length: 70 }, () => ({
+  x: Math.random() * W,
+  y: Math.random() * 135,
+  r: 0.5 + Math.random() * 1.3,
+  p: Math.random() * TAU
+}));
 
-// Reset
 function resetGame() {
-  abhi.y = groundY - abhi.height;
-  abhi.velocityY = 0;
+  abhi.y = GROUND - abhi.height;
+  abhi.vy = 0;
   abhi.jumping = false;
   obstacles = [];
-  clouds = [];
-  stars = [];
+  clouds = [
+    { x: 200, y: 70, speed: 1.2 },
+    { x: 520, y: 90, speed: 1.8 }
+  ];
+  pebbles = Array.from({ length: 32 }, () => ({
+    x: Math.random() * W,
+    y: GROUND + 5 + Math.random() * 12,
+    w: 2 + Math.random() * 4
+  }));
   score = 0;
   gameSpeed = 7;
   frame = 0;
+  nextSpawn = 60;
   gameOver = false;
 }
 
-// ✅ UNIFIED JUMP HANDLER (Keyboard + Touch)
+// ---------- Input ----------
 function handleJump() {
-  if (!gameOver && !abhi.jumping) {
-    abhi.velocityY = jumpPower;
+  if (gameOver) {
+    if (performance.now() - overAt > 350) resetGame();   // avoid instant restart
+    return;
+  }
+  if (!abhi.jumping) {
+    abhi.vy = JUMP;
     abhi.jumping = true;
   }
-  if (gameOver) {
-    resetGame();
-    requestAnimationFrame(update);
-  }
 }
 
-// Background
-function drawBackground() {
-  dayTimer++;
-  const cycle = (dayTimer % dayLength) / dayLength;
+function toggleSky() {
+  realSky = !realSky;
+  document.getElementById("skyBtn").textContent =
+    realSky ? "🕒 Sky: Real time" : "🕒 Sky: Game cycle";
+}
 
-  let sky;
-  if (cycle < 0.5) {
-    sky = `rgb(${200 - cycle*120}, ${230 - cycle*80}, 255)`;
+document.addEventListener("keydown", e => {
+  if (e.code === "Space" || e.code === "ArrowUp") {
+    e.preventDefault();
+    handleJump();
+  } else if (e.code === "KeyT") {
+    toggleSky();
+  }
+});
+canvas.addEventListener("touchstart", e => { e.preventDefault(); handleJump(); }, { passive: false });
+canvas.addEventListener("click", handleJump);
+document.getElementById("skyBtn").addEventListener("click", e => { toggleSky(); e.currentTarget.blur(); });
+
+// ---------- Day / Night ----------
+// Returns how dark it is (0 = full day, 1 = full night) + sun/moon position.
+function skyState() {
+  let n = 0, sunT = null, moonT = null, dusk = false, dawn = false;
+
+  if (!realSky) {
+    // Game cycle: day 50% • dusk 10% • night 25% • dawn 10% • day 5%
+    const c = (dayTimer % DAY_LEN) / DAY_LEN;
+    if (c < 0.5) n = 0;
+    else if (c < 0.6) { n = (c - 0.5) / 0.1; dusk = true; }
+    else if (c < 0.85) n = 1;
+    else if (c < 0.95) { n = 1 - (c - 0.85) / 0.1; dawn = true; }
+    if (c < 0.62) sunT = c / 0.62;
+    if (c >= 0.55) moonT = (c - 0.55) / 0.45;
   } else {
-    sky = `rgb(${30 + (cycle-0.5)*60}, ${30 + (cycle-0.5)*60}, 70)`;
+    // Real clock: night ≈ 7:30 PM – 5:30 AM
+    const d = new Date();
+    const h = d.getHours() + d.getMinutes() / 60;
+    if (h >= 18.5 && h < 19.5) { n = h - 18.5; dusk = true; }
+    else if (h >= 19.5 || h < 5.5) n = 1;
+    else if (h >= 5.5 && h < 6.5) { n = 1 - (h - 5.5); dawn = true; }
+    if (h >= 6 && h < 18) sunT = (h - 6) / 12;
+    if (h >= 17 || h < 7) moonT = ((h >= 17 ? h - 17 : h + 7)) / 14;
   }
 
-  ctx.fillStyle = sky;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  if (cycle < 0.45) drawSun(80, 60);
-  if (cycle > 0.55) drawStars();
+  n = smooth(Math.min(1, Math.max(0, n)));
+  let label = "DAY", icon = "☀️";
+  if (dusk) { label = "DUSK"; icon = "🌇"; }
+  else if (dawn) { label = "DAWN"; icon = "🌅"; }
+  else if (n > 0.98) { label = "NIGHT"; icon = "🌙"; }
+  return { n, sunT, moonT, label, icon };
 }
 
-// Sun
-function drawSun(x, y) {
-  const g = ctx.createRadialGradient(x, y, 5, x, y, 30);
-  g.addColorStop(0, "rgba(255,255,200,1)");
-  g.addColorStop(1, "rgba(255,255,200,0)");
+const arcPos = t => ({ x: 60 + t * (W - 120), y: 178 - Math.sin(t * Math.PI) * 140 });
+
+function drawSun(s) {
+  if (s.sunT === null) return;
+  const a = Math.max(0, 1 - s.n * 1.3);
+  if (a <= 0) return;
+  const p = arcPos(s.sunT);
+  const warm = Math.sqrt(Math.sin(s.sunT * Math.PI));          // orange near the horizon
+  const core = rgb(mix([255, 140, 60], [255, 213, 79], warm));
+  ctx.save();
+  ctx.globalAlpha = a;
+  const g = ctx.createRadialGradient(p.x, p.y, 6, p.x, p.y, 46);
+  g.addColorStop(0, "rgba(255,236,150,.9)");
+  g.addColorStop(1, "rgba(255,236,150,0)");
   ctx.fillStyle = g;
-  ctx.beginPath();
-  ctx.arc(x, y, 30, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.beginPath(); ctx.arc(p.x, p.y, 46, 0, TAU); ctx.fill();
+  ctx.fillStyle = core;
+  ctx.beginPath(); ctx.arc(p.x, p.y, 14, 0, TAU); ctx.fill();
+  ctx.restore();
 }
 
-// Stars
-function drawStars() {
-  if (stars.length < 40) {
-    stars.push({
-      x: Math.random() * canvas.width,
-      y: Math.random() * 120,
-      r: Math.random() * 2
-    });
-  }
+function drawMoon(s) {
+  if (s.moonT === null) return;
+  const a = Math.min(1, s.n * 1.4);
+  if (a <= 0) return;
+  const p = arcPos(s.moonT);
+  ctx.save();
+  ctx.globalAlpha = a;
+  const g = ctx.createRadialGradient(p.x, p.y, 8, p.x, p.y, 48);
+  g.addColorStop(0, "rgba(200,215,255,.55)");
+  g.addColorStop(1, "rgba(200,215,255,0)");
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(p.x, p.y, 48, 0, TAU); ctx.fill();
+  ctx.fillStyle = "#f1f0d8";
+  ctx.beginPath(); ctx.arc(p.x, p.y, 16, 0, TAU); ctx.fill();
+  ctx.fillStyle = "rgba(160,160,130,.45)";
+  ctx.beginPath(); ctx.arc(p.x - 5, p.y - 3, 3.5, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.arc(p.x + 5, p.y + 5, 2.5, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.arc(p.x + 4, p.y - 7, 2, 0, TAU); ctx.fill();
+  ctx.restore();
+}
+
+function drawStars(n) {
+  if (n < 0.05) return;
   ctx.fillStyle = "#fff";
   stars.forEach(s => {
+    ctx.globalAlpha = n * (0.55 + 0.45 * Math.sin(dayTimer * 0.05 + s.p));
+    ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, TAU); ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+}
+
+function drawHills(n) {
+  [
+    [168, 10, 0.12, HILL_FAR_D, HILL_FAR_N, 0.010],
+    [186, 7, 0.28, HILL_NEAR_D, HILL_NEAR_N, 0.018]
+  ].forEach(([base, amp, par, cd, cn, fr], i) => {
+    ctx.fillStyle = pal(cd, cn, n);
     ctx.beginPath();
-    ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+    ctx.moveTo(0, GROUND);
+    for (let x = 0; x <= W; x += 8) {
+      const wx = x + worldX * par;
+      ctx.lineTo(x, base - amp - Math.sin(wx * fr) * amp - Math.sin(wx * fr * 2.3 + i) * amp * 0.4);
+    }
+    ctx.lineTo(W, GROUND);
+    ctx.closePath();
     ctx.fill();
   });
 }
 
-// abhi
-function drawAbhi(ctx, x, y, frame) {
+function drawCloud(c, n) {
   ctx.save();
-  ctx.translate(x, y);
+  ctx.globalAlpha = 0.9 - n * 0.35;
+  ctx.fillStyle = pal(CLOUD_D, CLOUD_N, n);
+  ctx.beginPath();
+  ctx.arc(c.x, c.y, 16, 0, TAU);
+  ctx.arc(c.x + 20, c.y - 10, 20, 0, TAU);
+  ctx.arc(c.x + 40, c.y, 16, 0, TAU);
+  ctx.fill();
+  ctx.restore();
+}
 
-  ctx.fillStyle = "#535353";
-  ctx.fillRect(6, 6, 28, 18);
-  ctx.fillRect(25, -2, 16, 16);
-  ctx.fillRect(0, 16, 8, 6);
+// ---------- Obstacles ----------
+function glow(n, color) {
+  if (n > 0.05) { ctx.shadowColor = color.replace("A", (0.9 * n).toFixed(2)); ctx.shadowBlur = 14 * n; }
+}
 
-  ctx.fillStyle = "#fff";
-  ctx.fillRect(38, 2, 3, 3);
-  ctx.fillStyle = "#333";
-  ctx.fillRect(39, 3, 1, 1);
+// "Bug" cactus – hitbox: o.x … o.x + 28
+function drawCactus(o, n) {
+  const x = o.x + 8, y = GROUND, h = o.h;
+  const parts = [
+    [x, y - h, 12, h],
+    [x - 8, y - h * 0.55, 8, 5], [x - 8, y - h * 0.55 - 14, 5, 19],
+    [x + 12, y - h * 0.4, 8, 5], [x + 15, y - h * 0.4 - 12, 5, 17]
+  ];
+  ctx.save();
+  glow(n, "rgba(150,255,190,A)");
+  ctx.strokeStyle = pal(CACL_D, CACL_N, n);
+  ctx.lineWidth = 3;
+  parts.forEach(p => ctx.strokeRect(p[0], p[1], p[2], p[3]));
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = pal(CAC_D, CAC_N, n);
+  parts.forEach(p => ctx.fillRect(p[0], p[1], p[2], p[3]));
+  ctx.restore();
+}
 
-  ctx.fillStyle = "#444";
-  ctx.fillRect(14, 18, 8, 3);
+// "Deadline" tree – hitbox: o.x … o.x + 32
+function drawTree(o, n) {
+  const cx = o.x + 16, top = GROUND - o.h;
+  ctx.save();
+  glow(n, "rgba(160,255,200,A)");
+  ctx.fillStyle = pal(TRK_D, TRK_N, n);
+  ctx.fillRect(cx - 4, top + 16, 8, o.h - 16);
+  ctx.strokeStyle = pal(TREEL_D, TREEL_N, n);
+  ctx.lineWidth = 2;
+  ctx.fillStyle = pal(LEAF_D, LEAF_N, n);
+  [[cx, top + 10, 16], [cx - 12, top + 22, 12], [cx + 12, top + 22, 12]].forEach(c => {
+    ctx.beginPath(); ctx.arc(c[0], c[1], c[2], 0, TAU); ctx.fill(); ctx.stroke();
+  });
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = pal(LEAFH_D, LEAFH_N, n);
+  ctx.beginPath(); ctx.arc(cx - 4, top + 6, 6, 0, TAU); ctx.fill();
+  ctx.restore();
+}
 
-  ctx.fillStyle = "#535353";
-  if (frame % 2 === 0) {
-    ctx.fillRect(12, 26, 6, 14);
-    ctx.fillRect(24, 28, 6, 12);
-  } else {
-    ctx.fillRect(12, 28, 6, 12);
-    ctx.fillRect(24, 26, 6, 14);
+// ---------- Human runner ----------
+function limb(px, py, len, w, ang, color, shoe) {
+  ctx.save();
+  ctx.translate(px, py);
+  ctx.rotate(ang);
+  ctx.fillStyle = color;
+  ctx.fillRect(-w / 2, 0, w, len);
+  if (shoe) {
+    ctx.fillStyle = "#f5f5f5";
+    ctx.fillRect(-w / 2, len - 3, w + 4, 4);
   }
+  ctx.restore();
+}
+
+function drawAbhi(x, y, t, jumping, n) {
+  const swing = jumping ? 0 : Math.sin(t);
+  const bob = jumping ? 0 : -Math.abs(Math.sin(t)) * 1.5;
+  const SKIN = "#f1c27d", HAIR = "#2b1d14", SHIRT = "#ff6b35", SHIRT_D = "#d9511f", PANTS = "#2f4a8a";
+
+  ctx.save();
+  ctx.translate(x, y + bob);
+  if (n > 0.05) { ctx.shadowColor = `rgba(190,225,255,${(0.85 * n).toFixed(2)})`; ctx.shadowBlur = 10 * n; }
+
+  // back arm
+  limb(15, 19, 12, 5, jumping ? -2.0 : swing * 0.9, SHIRT_D, false);
+  // legs
+  limb(12, 33, 13, 6, jumping ? 0.5 : swing * 0.95, PANTS, true);
+  limb(18, 33, 13, 6, jumping ? -0.7 : -swing * 0.95, PANTS, true);
+  // backpack
+  ctx.fillStyle = "#3b5bdb"; ctx.fillRect(2, 18, 7, 15);
+  ctx.fillStyle = "#2c44a8"; ctx.fillRect(2, 18, 7, 3);
+  // torso
+  ctx.fillStyle = SHIRT; ctx.fillRect(8, 17, 15, 17);
+  ctx.fillStyle = SHIRT_D; ctx.fillRect(8, 30, 15, 4);
+  // neck + head
+  ctx.fillStyle = SKIN; ctx.fillRect(13, 14, 5, 4);
+  ctx.fillRect(9, 3, 13, 12);
+  // hair
+  ctx.fillStyle = HAIR;
+  ctx.fillRect(8, 0, 15, 5);
+  ctx.fillRect(8, 3, 3, 7);
+  // eye + mouth
+  ctx.fillStyle = "#1b1b1b"; ctx.fillRect(18, 7, 2, 3);
+  ctx.fillRect(18, 12, 3, 1);
+  // front arm
+  limb(15, 19, 12, 5, jumping ? -2.5 : -swing * 0.9, SHIRT, false);
+  ctx.save();
+  ctx.translate(15, 19);
+  ctx.rotate(jumping ? -2.5 : -swing * 0.9);
+  ctx.fillStyle = SKIN; ctx.fillRect(-2.5, 10, 5, 3);   // hand
+  ctx.restore();
 
   ctx.restore();
 }
 
-// bug
-function drawbug(ctx, x, y, h) {
-  ctx.fillStyle = "#397d02";
-  ctx.fillRect(x, y - h, 12, h);
-  ctx.fillRect(x - 5, y - h + 10, 5, 20);
-  ctx.fillRect(x + 12, y - h + 15, 4, 20);
+// ---------- Clock ----------
+let clockText = "", dateText = "", clockAt = 0;
+function updateClock() {
+  const now = Date.now();
+  if (now - clockAt < 250) return;
+  clockAt = now;
+  const d = new Date();
+  clockText = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  dateText = d.toLocaleDateString([], { weekday: "short", day: "2-digit", month: "short" });
 }
 
-// deadline
-function drawdeadline(ctx, x, y, h) {
-  ctx.fillStyle = "#8b5a2b";
-  ctx.fillRect(x + 6, y - h, 10, h);
-
-  ctx.fillStyle = "#2d6a4f";
-  ctx.beginPath();
-  ctx.arc(x + 11, y - h, 20, 0, Math.PI * 2);
-  ctx.fill();
-}
-
-// Cloud
-function drawCloud(ctx, x, y) {
-  ctx.fillStyle = "#bbb";
-  ctx.beginPath();
-  ctx.arc(x, y, 16, 0, Math.PI * 2);
-  ctx.arc(x + 20, y - 10, 20, 0, Math.PI * 2);
-  ctx.arc(x + 40, y, 16, 0, Math.PI * 2);
-  ctx.fill();
-}
-
-// Draw
-function draw() {
-
-  drawBackground();
-
-ctx.font="20px monospace";
-ctx.fillStyle="#222";
-ctx.fillText("🏃 ABHI RUN",20,24);
-
-ctx.font="13px monospace";
-ctx.fillStyle="#666";
-ctx.fillText("Escape Bugs • Deadlines • Reality",20,42);
-
-  ctx.strokeStyle = "#555";
-  ctx.beginPath();
-  ctx.moveTo(0, groundY);
-  ctx.lineTo(canvas.width, groundY);
-  ctx.stroke();
-
-  clouds.forEach(c => drawCloud(ctx, c.x, c.y));
-
-  obstacles.forEach(o => {
-    if(o.type=="deadline") drawdeadline(ctx, o.x, groundY, o.h);
-    else drawbug(ctx, o.x, groundY, o.h);
-  });
-
-  drawAbhi(ctx, abhi.x, abhi.y, Math.floor(frame / 6));
-
-  ctx.font = "20px monospace";
-  ctx.fillStyle = "#444";
-  ctx.fillText(
-`BEST ${String(highScore).padStart(5,"0")}   SCORE ${String(score).padStart(5,"0")}`,
-canvas.width-330,
-40
-);
-
-  if (gameOver) {
-    ctx.font = "36px monospace";
-    ctx.fillStyle = "#d90429";
-    ctx.fillText("ABHI GOT CAUGHT!", canvas.width / 2 - 165, 110);
-    ctx.font = "22px monospace";
-    ctx.fillStyle = "#333";
-    ctx.fillText("Tap / Press Space to Make Abhi Run Again!", canvas.width / 2 - 215, 145);
-  }
-}
-
-// Update
-function update() {
-  if (gameOver) return draw();
+// ---------- Update ----------
+function tick() {
+  dayTimer++;
+  if (gameOver) return;
 
   frame++;
-  if (frame % 120 === 0) gameSpeed += 0.25;
+  worldX += gameSpeed;
+  if (frame % 120 === 0) gameSpeed = Math.min(gameSpeed + 0.25, 17);
 
-  abhi.y += abhi.velocityY;
-  abhi.velocityY += gravity;
-  if (abhi.y > groundY - abhi.height) {
-    abhi.y = groundY - abhi.height;
-    abhi.velocityY = 0;
+  abhi.y += abhi.vy;
+  abhi.vy += GRAVITY;
+  if (abhi.y >= GROUND - abhi.height) {
+    abhi.y = GROUND - abhi.height;
+    abhi.vy = 0;
     abhi.jumping = false;
   }
 
-  if (frame % 90 === 0) {
-    const isdeadline = Math.random() < 0.4;
+  if (frame >= nextSpawn) {
+    const tree = Math.random() < 0.4;
     obstacles.push({
-      x: canvas.width + 20,
-      h: isdeadline ? 50 : 35 + Math.random() * 25,
-      w: isdeadline ? 24 : 12,
-      type: isdeadline ? "deadline" : "bug"
+      x: W + 20,
+      type: tree ? "tree" : "cactus",
+      h: tree ? 50 + Math.random() * 12 : 35 + Math.random() * 25,
+      w: tree ? 32 : 28
     });
+    nextSpawn = frame + Math.max(55, Math.round(95 - gameSpeed * 1.5 + Math.random() * 45));
   }
+
+  // player hitbox (slightly forgiving)
+  const ax = abhi.x + 6, aw = abhi.width - 12;
+  const ay = abhi.y + 4, ah = abhi.height - 4;
 
   obstacles.forEach(o => {
     o.x -= gameSpeed;
-    if (
-      o.x < abhi.x + abhi.width &&
-      o.x + o.w > abhi.x &&
-      groundY - o.h < abhi.y + abhi.height
-    ) {
+    if (o.x + 4 < ax + aw && o.x + o.w - 4 > ax && GROUND - o.h < ay + ah) {
       gameOver = true;
-      highScore = Math.max(score, highScore);
+      overAt = performance.now();
+      if (score > highScore) {
+        highScore = score;
+        try { localStorage.setItem("abhirun_best", String(highScore)); } catch (e) {}
+      }
     }
   });
-
   obstacles = obstacles.filter(o => o.x + o.w > 0);
 
-  if (Math.random() < 0.01) {
-    clouds.push({ x: canvas.width, y: 50 + Math.random() * 40, speed: 1 + Math.random() * 2 });
-  }
+  if (Math.random() < 0.01) clouds.push({ x: W, y: 50 + Math.random() * 45, speed: 1 + Math.random() * 2 });
   clouds.forEach(c => c.x -= c.speed);
   clouds = clouds.filter(c => c.x > -80);
 
-  if (frame % 2 === 0) score++;
+  pebbles.forEach(p => {
+    p.x -= gameSpeed;
+    if (p.x < -6) { p.x = W + Math.random() * 40; p.y = GROUND + 5 + Math.random() * 12; }
+  });
 
-  draw();
-  requestAnimationFrame(update);
+  if (frame % 2 === 0) score++;
 }
 
-// ✅ CONTROLS
-document.addEventListener("keydown", e => {
-  if (e.code === "Space" || e.code === "ArrowUp") {
-    handleJump();
+// ---------- Draw ----------
+function draw() {
+  const s = skyState(), n = s.n;
+  updateClock();
+
+  // sky
+  const top = mix(SKY_TOP_D, SKY_TOP_N, n);
+  const bot = mix(mix(SKY_BOT_D, SKY_BOT_N, n), [255, 150, 95], 4 * n * (1 - n) * 0.55); // sunset glow
+  const g = ctx.createLinearGradient(0, 0, 0, GROUND);
+  g.addColorStop(0, rgb(top));
+  g.addColorStop(1, rgb(bot));
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+
+  drawStars(n);
+  drawSun(s);
+  drawMoon(s);
+  drawHills(n);
+  clouds.forEach(c => drawCloud(c, n));
+
+  // ground
+  ctx.fillStyle = pal(GROUND_D, GROUND_N, n);
+  ctx.fillRect(0, GROUND, W, H - GROUND);
+  ctx.fillStyle = pal(PEBBLE_D, PEBBLE_N, n);
+  pebbles.forEach(p => ctx.fillRect(p.x, p.y, p.w, 2));
+  ctx.strokeStyle = pal(LINE_D, LINE_N, n);
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(0, GROUND); ctx.lineTo(W, GROUND); ctx.stroke();
+
+  // obstacles + player
+  obstacles.forEach(o => (o.type === "tree" ? drawTree(o, n) : drawCactus(o, n)));
+  drawAbhi(abhi.x, abhi.y, frame * 0.35, abhi.jumping, n);
+
+  // HUD
+  const darkText = n < 0.5;
+  const main = darkText ? "#1f2937" : "#f3f4f6";
+  const sub  = darkText ? "#4b5563" : "#b3bdd3";
+  ctx.save();
+  ctx.shadowColor = darkText ? "rgba(255,255,255,.6)" : "rgba(0,0,0,.7)";
+  ctx.shadowBlur = 3;
+  ctx.textAlign = "left";
+  ctx.font = "bold 20px monospace"; ctx.fillStyle = main;
+  ctx.fillText("🏃 ABHI RUN", 20, 28);
+  ctx.font = "12px monospace"; ctx.fillStyle = sub;
+  ctx.fillText("Escape Bugs • Deadlines • Reality", 20, 46);
+
+  ctx.textAlign = "right";
+  ctx.font = "bold 17px monospace"; ctx.fillStyle = main;
+  ctx.fillText(`BEST ${pad(highScore)}  SCORE ${pad(score)}`, W - 16, 28);
+  ctx.font = "13px monospace"; ctx.fillStyle = sub;
+  ctx.fillText(`🕒 ${clockText} • ${s.icon} ${s.label}`, W - 16, 48);
+  ctx.fillText(dateText + (realSky ? " • REAL SKY" : ""), W - 16, 64);
+  ctx.restore();
+
+  if (gameOver) {
+    ctx.fillStyle = "rgba(0,0,0,.25)";
+    ctx.fillRect(0, 0, W, H);
+    ctx.textAlign = "center";
+    ctx.font = "bold 34px monospace";
+    ctx.fillStyle = "#ff4d5e";
+    ctx.fillText("ABHI GOT CAUGHT!", W / 2, 108);
+    ctx.font = "18px monospace";
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText("Tap / Press Space to Make Abhi Run Again!", W / 2, 142);
+    ctx.textAlign = "left";
   }
-});
 
-canvas.addEventListener("touchstart", e => {
-  e.preventDefault();
-  handleJump();
-}, { passive: false });
+  // page background + hint follow the sky
+  document.body.style.background = rgb(mix([242, 244, 247], [12, 16, 32], n));
+  document.getElementById("hint").style.color = rgb(mix([85, 85, 85], [170, 180, 205], n));
+}
 
-canvas.addEventListener("click", () => {
-  handleJump();
-});
+// ---------- Main loop ----------
+let last = performance.now(), acc = 0;
+function loop(now) {
+  acc += Math.min(now - last, 100);
+  last = now;
+  while (acc >= STEP) { tick(); acc -= STEP; }
+  draw();
+  requestAnimationFrame(loop);
+}
 
 resetGame();
-requestAnimationFrame(update);
+requestAnimationFrame(loop);
 </script>
 
 </body>
