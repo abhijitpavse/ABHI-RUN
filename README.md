@@ -1,147 +1,98 @@
+<div align="center">
 
-<p align="center">
-  <img src="preview.gif" width="750" alt="ABHI RUN Gameplay">
-</p>
+<img src="preview.gif" alt="ABHI RUN gameplay" width="720"/>
 
-<h1 align="center">🏃 ABHI RUN</h1>
+# 🏃 ABHI RUN
 
-<p align="center">
-An endless runner game inspired by the Chrome Dino Game, reimagined with a programmer's life.
-</p>
-
-<p align="center">
+**An endless runner inspired by the Chrome Dino game, reimagined around a programmer's life.**
+Abhi runs through day and night, dodging bugs and deadlines.
 
 <a href="https://abhijitpavse.github.io/ABHI-RUN/">
-<img src="https://img.shields.io/badge/▶️%20PLAY-ABHI%20RUN-00C853?style=for-the-badge&logo=github&logoColor=white">
+  <img src="https://img.shields.io/badge/▶_PLAY_NOW-00C853?style=for-the-badge&logo=github&logoColor=white" alt="Play now"/>
 </a>
 
-</p>
+<img src="https://img.shields.io/github/stars/abhijitpavse/ABHI-RUN?style=flat-square" alt="Stars"/>
+<img src="https://img.shields.io/github/forks/abhijitpavse/ABHI-RUN?style=flat-square" alt="Forks"/>
+<img src="https://img.shields.io/github/license/abhijitpavse/ABHI-RUN?style=flat-square" alt="License"/>
+<img src="https://img.shields.io/github/last-commit/abhijitpavse/ABHI-RUN?style=flat-square" alt="Last commit"/>
 
-<p align="center">
-
-<img src="https://img.shields.io/github/stars/abhijitpavse/ABHI-RUN?style=flat-square">
-<img src="https://img.shields.io/github/forks/abhijitpavse/ABHI-RUN?style=flat-square">
-<img src="https://img.shields.io/github/license/abhijitpavse/ABHI-RUN?style=flat-square">
-<img src="https://img.shields.io/github/last-commit/abhijitpavse/ABHI-RUN?style=flat-square">
-
-</p>
+</div>
 
 ---
 
-# 🎮 Play Now
+## 📖 About
 
-### 👉 https://abhijitpavse.github.io/ABHI-RUN/
+**ABHI RUN** is built with **HTML5 Canvas, CSS and vanilla JavaScript**, with no libraries and no build step. You play as **Abhi**, a pixel-art programmer who has to survive the daily coding journey by jumping over **bugs** (cactus) and **deadlines** (trees) while chasing a high score.
 
----
+## ✨ Features
 
-# 📖 About
+- 🧑‍💻 **Pixel-art human runner** with a running cycle, jump pose and laptop backpack
+- 🌗 **Smooth day, dusk, night and dawn cycle** with sun, moon, twinkling stars and sunset glow
+- 🌲 **Night-visible obstacles**: bugs and deadlines brighten and glow in the dark
+- ⛰️ **Parallax hills**, drifting clouds and a scrolling ground texture
+- 🕒 **Live real-time clock and date** shown while you play
+- 🌍 **Real-sky mode**: press `T` to make the in-game sky follow your actual local time
+- 💾 **High score saved** in your browser (localStorage)
+- ⚡ Speed increases as you survive, with a fixed 60 FPS game loop on every screen
+- 📱 Keyboard, mouse and touch controls, with a responsive canvas
 
-**ABHI RUN** is a fun endless runner game built using **HTML5 Canvas, CSS and JavaScript**.
+## 🎮 Controls
 
-Inspired by the classic Chrome Dino Game, this version follows **Abhi**, a programmer who must survive the daily coding journey by avoiding obstacles and chasing the highest score.
+| Action | Input |
+|:--|:--|
+| Jump / Restart | `Space` or `↑` |
+| Jump / Restart (mobile) | Tap the screen |
+| Toggle sky mode (game cycle ↔ real time) | `T` or the on-screen button |
 
----
+## 🛠️ Built With
 
-# ✨ Features
+![HTML5](https://img.shields.io/badge/HTML5-E34F26?style=flat-square&logo=html5&logoColor=white)
+![CSS3](https://img.shields.io/badge/CSS3-1572B6?style=flat-square&logo=css3&logoColor=white)
+![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?style=flat-square&logo=javascript&logoColor=black)
+![Canvas](https://img.shields.io/badge/Canvas_API-FF6B35?style=flat-square)
 
-- 🏃 Endless Runner Gameplay
-- 🌞 Dynamic Day & Night Cycle
-- ☁️ Animated Clouds
-- ⭐ Beautiful Night Sky
-- 📈 High Score Counter
-- ⚡ Increasing Difficulty
-- 📱 Mobile Friendly
-- 💻 Desktop Support
-- 🎯 Smooth Keyboard Controls
-- 👆 Touch Controls
-- 🎨 Pixel Art Style
+## 📂 Project Structure
 
----
-
-# 🎮 Controls
-
-| Action | Key |
-|---------|-----|
-| Jump | Space |
-| Jump | ↑ Arrow |
-| Jump | Mobile Tap |
-
----
-
-# 🛠 Built With
-
-- HTML5
-- CSS3
-- JavaScript
-- HTML5 Canvas API
-
----
-
-# 📂 Project Structure
-
-```text
+```
 ABHI-RUN/
-
-├── index.html
+├── index.html     # Game: canvas, logic, day/night engine
+├── preview.gif    # Gameplay preview used in this README
 ├── README.md
+└── LICENSE        # Apache-2.0
 ```
 
----
+## 🚀 Run Locally
 
-# 🚀 Future Improvements
+```bash
+git clone https://github.com/abhijitpavse/ABHI-RUN.git
+cd ABHI-RUN
+# open index.html in any browser
+```
 
-- 👤 Pixel-Art Abhi Character
-- 🐞 Bug Obstacles
-- ☕ Coffee Power-ups
-- 📅 Deadline Obstacles
-- 💻 Laptop Collectibles
-- 🔊 Sound Effects
-- 🎵 Background Music
-- 💾 Save High Score
-- 🏆 Achievement System
-- 🌍 Global Leaderboard
+## 🗺️ Roadmap
 
----
+- [x] Pixel-art Abhi character
+- [x] Bug and deadline obstacles
+- [x] Save high score
+- [x] Day, dusk, night and dawn cycle
+- [ ] ☕ Coffee power-ups
+- [ ] 💻 Laptop collectibles
+- [ ] 🔊 Sound effects and background music
+- [ ] 🏆 Achievement system
+- [ ] 🌍 Global leaderboard
 
-# 💡 Inspiration
+## 🤝 Contributing
 
-This project is inspired by the famous **Google Chrome Dino Game** and redesigned with a programmer theme for fun and learning.
-
----
-
-# 🤝 Contributing
-
-Contributions are welcome!
-
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Open a Pull Request
-
----
-
-# ⭐ Support
-
-If you enjoyed this project,
-
-⭐ Star this repository
-
-and share it with your friends!
-
----
+Contributions are welcome. Fork the repo, create a feature branch, commit your changes and open a Pull Request.
 
 ## 👨‍💻 Author
 
-**Abhijit Pavse**
+**Abhijit Pavse**: [GitHub](https://github.com/abhijitpavse) • [LinkedIn](https://linkedin.com/in/abhijitpavse)
 
-GitHub: https://github.com/abhijitpavse
+<div align="center">
 
-LinkedIn: https://linkedin.com/in/abhijitpavse
+⭐ If you enjoyed the game, star the repo and share it with your friends!
 
----
+*If you're reading this... Abhi survived another deadline. 😎*
 
-<p align="center">
-
-If you're reading this... Abhi survived another deadline. 😎 Created using skills & 🧠.
-
-</p>
+</div>
